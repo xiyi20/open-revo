@@ -55,8 +55,8 @@ jobs:
       - name: Build Standalone Executable
         run: pnpm tauri build --no-bundle
 
-      # 9. 打包 7z 并计算 SHA256
-      - name: Prepare 7z Artifact
+      # 9. 准备 EXE 并重命名
+      - name: Prepare EXE Artifact
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -73,76 +73,26 @@ jobs:
 
           # 检查 EXE
           $srcExe = "src-tauri/target/release/open-revo.exe"
-
           if (!(Test-Path $srcExe)) {
             throw "Build failed: EXE not found"
           }
 
-          # 创建临时目录
-          $stageDir = "build_stage"
+          # 创建输出目录
           $distDir = "dist_artifacts"
-
-          New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
           New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 
-          Copy-Item $srcExe "$stageDir/OpenRevo.exe" -Force
+          # 重命名后的文件名
+          $exeName = "open-revo-$ver-$shortCommit.exe"
+          Copy-Item $srcExe "$distDir/$exeName" -Force
 
-          # 查找 7-Zip
-          $sevenZip = (Get-Command 7z -ErrorAction SilentlyContinue).Source
+          Write-Host "Artifact: $exeName"
 
-          if (!$sevenZip) {
-            $sevenZip = "$env:ProgramFiles/7-Zip/7z.exe"
-          }
-
-          if (!(Test-Path $sevenZip)) {
-            throw "7-Zip executable not found"
-          }
-
-          # 生成 7z
-          $archiveName = "OpenRevo-dev-v$ver-$shortCommit-Windows-x64.7z"
-          $archivePath = "$distDir/$archiveName"
-
-          & $sevenZip a -t7z -mx=9 "$archivePath" "$stageDir/OpenRevo.exe"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "7z archive creation failed"
-          }
-
-          # 验证压缩包
-          & $sevenZip t "$archivePath"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "7z archive verification failed"
-          }
-
-          # 生成 SHA256
-          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
-
-          "$hash  $archiveName" |
-            Set-Content "$distDir/checksums.txt" -Encoding ascii
-
-          # 记录源码版本
-          @"
-          Version: $ver
-          Branch: dev
-          Commit: $commit
-          Archive: $archiveName
-          SHA256: $hash
-          "@ | Set-Content "$distDir/source-info.txt" -Encoding utf8
-
-          Write-Host "Build completed successfully!" -ForegroundColor Green
-          Write-Host "Archive: $archiveName"
-          Write-Host "SHA256: $hash"
-
-      # 10. 上传到 GitHub Actions Artifacts
-      - name: Upload 7z Artifact
+      # 10. 上传单个 EXE 到 GitHub Actions Artifacts
+      - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenRevo-dev-Windows-x64
-          path: |
-            dist_artifacts/*.7z
-            dist_artifacts/checksums.txt
-            dist_artifacts/source-info.txt
+          name: open-revo-${{ github.run_id }}
+          path: dist_artifacts/open-revo-*.exe
           if-no-files-found: error
           retention-days: 14
 
