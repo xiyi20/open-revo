@@ -287,6 +287,8 @@ pub fn set_unlock_battery_power_limit(
         crate::system::config::save_config(&cfg);
         ec_state.lock().set_power_mode(target_mode);
         crate::update_tray_power_mode(target_mode);
+        crate::system::slint_window::sync_slint_switches_state();
+        crate::system::slint_window::sync_slint_power_targets(target_mode);
         let _ = app.emit("physical-mode-switched", target_mode);
         let _ = app.emit_to("main", "physical-mode-switched", target_mode);
         let _ = app.emit_to("osd", "physical-mode-switched", target_mode);
@@ -1892,6 +1894,7 @@ pub fn emit_plugin_broadcast(app: tauri::AppHandle, event: String, payload: serd
     crate::system::native_wry::broadcast_event(&event, &payload);
     Ok(())
 }
+
 
 
 
