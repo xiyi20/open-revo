@@ -1,4 +1,3 @@
-
 name: Build OpenRevo Dev for Windows
 
 on:
@@ -55,7 +54,7 @@ jobs:
       - name: Build Standalone Executable
         run: pnpm tauri build --no-bundle
 
-      # 9. 准备 EXE 并重命名
+      # 9. 准备 EXE 并生成压缩包名
       - name: Prepare EXE Artifact
         shell: pwsh
         run: |
@@ -77,22 +76,28 @@ jobs:
             throw "Build failed: EXE not found"
           }
 
-          # 创建输出目录
+          # 创建输出目录，EXE 统一命名为 open-revo.exe
           $distDir = "dist_artifacts"
           New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+          Copy-Item $srcExe "$distDir/open-revo.exe" -Force
 
-          # 重命名后的文件名
-          $exeName = "open-revo-$ver-$shortCommit.exe"
-          Copy-Item $srcExe "$distDir/$exeName" -Force
+          # 压缩包名：open-revo-<版本>-<短提交>.zip
+          $zipName = "open-revo-$ver-$shortCommit.zip"
+          "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          Write-Host "Artifact: $exeName"
+          Write-Host "ZIP: $zipName"
 
-      # 10. 上传单个 EXE 到 GitHub Actions Artifacts
-      - name: Upload EXE Artifact
+      # 10. 压缩并上传 zip（内含 open-revo.exe）
+      - name: Upload ZIP Artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Compress-Archive -Path "dist_artifacts/open-revo.exe" -DestinationPath "dist_artifacts/$env:ZIP_NAME" -Force
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: open-revo-${{ github.run_id }}
-          path: dist_artifacts/open-revo-*.exe
+          name: ${{ env.ZIP_NAME }}
+          path: dist_artifacts/${{ env.ZIP_NAME }}
           if-no-files-found: error
           retention-days: 14
-
