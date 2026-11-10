@@ -1,4 +1,4 @@
-name: Build OpenRevo Dev for Windows
+name: Build OpenRevo Dev
 
 on:
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: 20
 
-      # 3. 安装项目指定版本的 pnpm，绕过 action-setup self-installer
+      # 3. 安装项目指定版本的 pnpm
       - name: Setup pnpm
         shell: pwsh
         run: |
@@ -54,50 +54,38 @@ jobs:
       - name: Build Standalone Executable
         run: pnpm tauri build --no-bundle
 
-      # 9. 准备 EXE 并生成压缩包名
+      # 9. 准备 EXE 并计算 artifact 名
       - name: Prepare EXE Artifact
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
 
-          # 获取版本号
           $ver = (Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
-
-          # 获取实际源码提交号
           $commit = (git rev-parse HEAD).Trim()
           $shortCommit = $commit.Substring(0, 7)
 
           Write-Host "Version: $ver"
           Write-Host "Commit: $commit"
 
-          # 检查 EXE
           $srcExe = "src-tauri/target/release/open-revo.exe"
           if (!(Test-Path $srcExe)) {
             throw "Build failed: EXE not found"
           }
 
-          # 创建输出目录，EXE 统一命名为 open-revo.exe
           $distDir = "dist_artifacts"
           New-Item -ItemType Directory -Force -Path $distDir | Out-Null
           Copy-Item $srcExe "$distDir/open-revo.exe" -Force
 
-          # 压缩包名：open-revo-<版本>-<短提交>.zip
-          $zipName = "open-revo-$ver-$shortCommit.zip"
-          "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # artifact 名（平台自动加 .zip，得到 open-revo-<ver>-<shortCommit>.zip）
+          "ARTIFACT_NAME=open-revo-$ver-$shortCommit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          Write-Host "ZIP: $zipName"
+          Write-Host "Artifact: open-revo-$ver-$shortCommit"
 
-      # 10. 压缩并上传 zip（内含 open-revo.exe）
-      - name: Upload ZIP Artifact
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          Compress-Archive -Path "dist_artifacts/open-revo.exe" -DestinationPath "dist_artifacts/$env:ZIP_NAME" -Force
-
+      # 10. 只上传 open-revo.exe，平台自动打包为 <ARTIFACT_NAME>.zip
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ZIP_NAME }}
-          path: dist_artifacts/${{ env.ZIP_NAME }}
+          name: ${{ env.ARTIFACT_NAME }}
+          path: dist_artifacts/open-revo.exe
           if-no-files-found: error
           retention-days: 14
